@@ -18,10 +18,9 @@ TELEGRAM_CHAT_ID = os.getenv('TELEGRAM_CHAT_ID')
 
 logging.basicConfig(
     level=logging.DEBUG,
-    # filename='bot.log',
+    filename='bot.log',
     format='%(asctime)s, %(levelname)s, %(message)s',
-    encoding='UTF-8',
-    stream=sys.stdout
+    encoding='UTF-8'
 )
 
 RETRY_PERIOD: int = 600
@@ -55,8 +54,8 @@ def send_message(bot, message):
         bot.send_message(chat_id=TELEGRAM_CHAT_ID, text=message)
         logging.debug(f'Сообщение отправлено {message}')
     except Exception as error:
-        logging.error(f'Сообщение не отправлено {message}')
-        raise Exception(f'Ошибка {error}')
+        logging.error(f'Сообщение не отправлено: {message}')
+        raise Exception(f'Ошибка {error}') from error
 
 
 def get_api_answer(timestamp):
@@ -71,21 +70,21 @@ def get_api_answer(timestamp):
             )
     except requests.RequestException as error:
         logging.error(f'Не удалось получить значение из константы {error}')
-        raise Exception(f'Код ошибки: {response.status_code}')
+        raise Exception(f'Код ошибки: {response.status_code}') from error
     return response.json()
 
 
 def check_response(response):
     """Проверяет ответ API на соответствие документации."""
-    if 'homeworks' not in response.keys():
-        logging.error(response.keys())
+    if 'homeworks' not in response:
+        logging.error(response)
         raise not isinstance('Отсутствует ключ homeworks в response')
     if not isinstance(response, dict):
         logging.error(response)
         raise TypeError('response не соответствует типу')
     homeworks = response.get('homeworks')
     if not isinstance(homeworks, list):
-        logging.error(response)
+        logging.error(homeworks)
         raise TypeError('homeworks не соответствует типу')
     if response.get('homeworks') is None:
         logging.error(response.get('homeworks'))
@@ -96,20 +95,21 @@ def check_response(response):
 def parse_status(homework):
     """Извлекает информацию о конкретной домашней работе."""
     if not isinstance(homework, dict):
+        logging.error(homework)
         raise TypeError('Переменная не словарь')
-    homework_status = homework('status')
-    homework_name = homework('homework_name')
-    if homework_name not in homework:
+    if 'homework_name' not in homework:
         logging.error('Отсутствует ключ homework_name в ответе API')
-        raise KeyError('Отсутствует ключ homework_name в ответе API')
-    if homework_status not in homework:
-        logging.error('Отсутствует ключ homework_status в ответе API')
-        raise KeyError('Отсутствует ключ status в ответе API')
-    if not None and homework_status not in HOMEWORK_VERDICTS:
-        verdict = HOMEWORK_VERDICTS[homework_status]
-        logging.error(f'Неожиданный статус работы: {homework_status}')
-        return f'Изменился статус проверки работы "{homework_name}". {verdict}'
-    raise Exception(f'Неизвестный статус работы {homework_status}')
+        raise KeyError('Отсутствует ключ "homework_name" в ответе API')
+    if 'status' not in homework:
+        logging.error('Отсутствует ключ status в ответе API')
+        raise KeyError('Отсутствует ключ "status" в ответе API')
+    homework_name = homework['homework_name']
+    status = homework['status']
+    if status not in HOMEWORK_VERDICTS:
+        logging.error('Неожиданный статус работы')
+        raise ValueError(f'Неизвестный статус {status}')
+    verdict = HOMEWORK_VERDICTS[status]
+    return f'Изменился статус проверки работы "{homework_name}". {verdict}'
 
 
 def main():
@@ -117,24 +117,20 @@ def main():
     check_tokens()
 
     bot = telegram.Bot(token=TELEGRAM_TOKEN)
-    # timestamp: int = 1674806817
     timestamp = int(time.time())
     recent_status_homework = ''
 
     while True:
         try:
-            response = get_api_answer(timestamp)
-            check_response(response)
-            if response.get('homework'):
-                new_status = response.get('homework')[0]
-                if recent_status_homework != new_status.get('status'):
-                    recent_status_homework = new_status.get(
-                        'status')
-                    message = parse_status(recent_status_homework)
-                    send_message(bot, message)
-                else:
-                    logging.debug('Нет новых статусов')
-                    raise Exception(message)
+            homework_response = get_api_answer(timestamp)
+            homeworks = check_response(homework_response)
+            homework_status = parse_status(homeworks[0])
+            if homework_status == recent_status_homework:
+                logging.debug('Нет новых статусов')
+            else:
+                recent_status_homework = homework_status
+                message = homework_status
+                send_message(bot, message)
         except Exception as error:
             message = f'Сбой в работе программы: {error}.'
             logging.error(message)
