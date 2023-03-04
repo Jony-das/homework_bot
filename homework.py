@@ -39,7 +39,7 @@ def check_tokens():
 
 def send_message(bot, message):
     """Отправляет сообщение в Телеграм чат."""
-    logging.debug('Сообщение отправлено')
+    logging.info(f'Попытка отправки сообщения {message}')
     try:
         bot.send_message(chat_id=TELEGRAM_CHAT_ID, text=message)
     except TelegramError as error:
@@ -48,17 +48,18 @@ def send_message(bot, message):
             error,
             exc_info=True
         )
+    logging.debug(f'Сообщение отправлено {message}')
 
 
 def get_api_answer(timestamp):
-    """Делает запрос к endpoint API-сервиса и получает ответ."""
+    """Делает запрос к endpoint API-сервиса, и получает ответ."""
     payload = {'from_date': timestamp}
     try:
         response = requests.get(ENDPOINT, headers=HEADERS, params=payload)
     except requests.RequestException as error:
-        raise Exception(f'Код ошибки {error}') from error
+        raise KeyError(f'API недоступно {error}, {payload}') from error
     if response.status_code != HTTPStatus.OK:
-        raise ConnectionError(
+        raise requests.ConnectionError(
             f'Неверный HTTPStatus: {response.status_code}',
             f'Текст ошибки: {response.text}'
         )
@@ -72,8 +73,6 @@ def check_response(response):
     if 'homeworks' not in response:
         raise KeyError('Отсутствует ключ homeworks в response')
     homeworks = response.get('homeworks')
-    if response.get('homeworks') is None:
-        raise ValueError('Список пустой')
     if not isinstance(homeworks, list):
         raise TypeError('homeworks не соответствует типу')
     if not response.get('current_date'):
@@ -102,12 +101,12 @@ def main():
     check_tokens()
 
     bot = telegram.Bot(token=TELEGRAM_TOKEN)
-    timestamp = int(time.time())
     recent_status_homework = ''
 
     while True:
-        homework_response = get_api_answer(timestamp)
+        timestamp = int(time.time())
         try:
+            homework_response = get_api_answer(timestamp)
             homeworks = check_response(homework_response)
             message = parse_status(homeworks[0])
             if message == recent_status_homework:
@@ -117,10 +116,10 @@ def main():
                 recent_status_homework = message
 
         except Exception as error:
+            send_message(bot, message)
             recent_status_homework = message
             message = f'Сбой в работе программы: {error}.'
             logging.error(message, exc_info=True)
-            send_message(bot, message)
         finally:
             time.sleep(RETRY_PERIOD)
 
