@@ -3,6 +3,7 @@ import os
 import sys
 import time
 from http import HTTPStatus
+from urllib import response
 
 import requests
 import telegram
