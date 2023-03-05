@@ -9,6 +9,8 @@ import telegram
 from dotenv import load_dotenv
 from telegram import TelegramError
 
+from exceptions import APIError, HTTPStatusError
+
 load_dotenv()
 
 
@@ -48,7 +50,8 @@ def send_message(bot, message):
             error,
             exc_info=True
         )
-    logging.debug(f'Сообщение отправлено {message}')
+    finally:
+        logging.debug(f'Сообщение отправлено {message}')
 
 
 def get_api_answer(timestamp):
@@ -57,9 +60,9 @@ def get_api_answer(timestamp):
     try:
         response = requests.get(ENDPOINT, headers=HEADERS, params=payload)
     except requests.RequestException as error:
-        raise KeyError(f'API недоступно {error}, {payload}') from error
+        raise APIError(f'API недоступно {error}, {payload}') from error
     if response.status_code != HTTPStatus.OK:
-        raise requests.ConnectionError(
+        raise HTTPStatusError(
             f'Неверный HTTPStatus: {response.status_code}',
             f'Текст ошибки: {response.text}'
         )
@@ -101,22 +104,25 @@ def main():
     check_tokens()
 
     bot = telegram.Bot(token=TELEGRAM_TOKEN)
+    timestamp = int(time.time())
     recent_status_homework = ''
 
     while True:
-        timestamp = int(time.time())
         try:
             homework_response = get_api_answer(timestamp)
             homeworks = check_response(homework_response)
             message = parse_status(homeworks[0])
             if message == recent_status_homework:
                 logging.debug('Нет новых статусов')
+            elif not isinstance(homeworks, list):
+                logging.debug('Список работ пуст')
             else:
                 send_message(bot, message)
                 recent_status_homework = message
+            time_variable = response.get('timestamp')
 
         except Exception as error:
-            send_message(bot, message)
+            send_message(bot, time_variable)
             recent_status_homework = message
             message = f'Сбой в работе программы: {error}.'
             logging.error(message, exc_info=True)
