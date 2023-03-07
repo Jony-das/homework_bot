@@ -51,7 +51,7 @@ def send_message(bot, message):
             error,
             exc_info=True
         )
-    finally:
+    else:
         logging.debug(f'Сообщение отправлено {message}')
 
 
@@ -112,21 +112,24 @@ def main():
         try:
             homework_response = get_api_answer(timestamp)
             homeworks = check_response(homework_response)
+            if not homeworks:
+                logging.debug('Список работ пуст')
             message = parse_status(homeworks[0])
             if message == recent_status_homework:
                 logging.debug('Нет новых статусов')
-            elif not isinstance(homeworks, list):
-                logging.debug('Список работ пуст')
             else:
                 send_message(bot, message)
                 recent_status_homework = message
-            time_variable = response.get('timestamp')
+            timestamp = response.get('timestamp')
+            break
 
         except Exception as error:
-            send_message(bot, time_variable)
+            send_message(bot, message)
             recent_status_homework = message
             message = f'Сбой в работе программы: {error}.'
             logging.error(message, exc_info=True)
+            break
+
         finally:
             time.sleep(RETRY_PERIOD)
 
