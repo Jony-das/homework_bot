@@ -114,6 +114,7 @@ def main():
             homeworks = check_response(homework_response)
             if not homeworks:
                 logging.debug('Список работ пуст')
+                continue
             homework = homeworks[0]
             message = parse_status(homework)
             if message == recent_status_homework:
@@ -124,11 +125,11 @@ def main():
             timestamp = response.get('timestamp')
 
         except Exception as error:
-            if message != recent_status_homework:
-                recent_status_homework = message
-                send_message(bot, message)
+            send_message(bot, message)
+            recent_status_homework = message
             message = f'Сбой в работе программы: {error}.'
-            logging.error(message, exc_info=True)
+            if message != recent_status_homework:
+                logging.error(message, exc_info=True)
 
         finally:
             time.sleep(RETRY_PERIOD)
