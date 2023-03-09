@@ -125,10 +125,10 @@ def main():
             timestamp = response.get('timestamp')
 
         except Exception as error:
+            answer = recent_status_homework
             send_message(bot, message)
-            recent_status_homework = message
-            message = f'Сбой в работе программы: {error}.'
-            if message != recent_status_homework:
+            if message != answer:
+                message = f'Сбой в работе программы: {error}.'
                 logging.error(message, exc_info=True)
 
         finally:
